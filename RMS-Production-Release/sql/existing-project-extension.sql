@@ -6,6 +6,7 @@ begin;
 
 -- Applicant registration/profile fields used by the portal.
 alter table public.applicants add column if not exists skills text;
+alter table public.applicants add column if not exists updated_at timestamptz not null default now();
 alter table public.applicants add column if not exists auth_user_id uuid
   references auth.users(id) on delete set null;
 create unique index if not exists applicants_auth_user_id_uidx
@@ -84,6 +85,16 @@ alter table public.interviews add constraint interviews_score_range_check check 
 
 alter table public.hiring add column if not exists updated_at timestamptz default now();
 alter table public.hiring drop constraint if exists hiring_status_check;
+-- Preserve existing decisions while normalizing the legacy uppercase labels
+-- used by the previous release to the values expected by the current UI.
+update public.hiring
+set status = case upper(trim(status))
+  when 'HIRED' then 'Hired'
+  when 'DECLINED' then 'Declined'
+  when 'REJECTED' then 'Rejected'
+  when 'ON HOLD' then 'On Hold'
+end
+where upper(trim(status)) in ('HIRED','DECLINED','REJECTED','ON HOLD');
 alter table public.hiring add constraint hiring_status_check
   check (status in ('Hired','Declined','Rejected','On Hold'));
 

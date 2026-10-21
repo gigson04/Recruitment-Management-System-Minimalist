@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="light dark"><meta name="theme-color" content="#ffffff">
+  <meta name="description" content="Recruitment Management System — recruitment workflow and applicant tracking.">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co; img-src 'self' data: https:">
+  <title>Hiring decisions | Recruitment Management System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css?v=session-restore-2026-10-21">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3" defer></script>
+  <script src="js/config.js?v=automatic-grading-2026-10-18" defer></script><script src="js/page-views.js?v=login-module-fix-2026-10-21" defer></script><script src="js/demo-data.js?v=login-demo-fix-2026-10-21" defer></script><script src="js/record-actions.js?v=login-module-fix-2026-10-21" defer></script><script src="js/app.js?v=session-restore-2026-10-21" defer></script>
+</head>
+<body data-page="hiring">
+  <main id="startupScreen" class="startup-screen" role="status" aria-live="polite" aria-busy="true">
+    <div class="startup-card">
+      <span class="brand-mark" aria-hidden="true">R</span>
+      <strong>Recruitment Management System</strong>
+      <span class="muted">Restoring your session…</span>
+      <span class="startup-spinner" aria-hidden="true"></span>
+    </div>
+  </main>
+  <div id="authScreen" class="auth-screen hidden">
+    <section class="auth-card">
+      <div class="brand"><span class="brand-mark">R</span><span><b>Recruitment</b><small>Management System</small></span></div>
+      <h1 id="authTitle">Sign in</h1><p class="muted" id="authSubtitle">Sign in to continue to your workspace.</p>
+      <form id="loginForm" class="stack" autocomplete="on" aria-describedby="authMessage">
+        <label for="loginEmail">Email<input id="loginEmail" name="email" type="email" autocomplete="username" inputmode="email" autocapitalize="none" spellcheck="false" required maxlength="254"></label>
+        <label for="loginPassword">Password<input id="loginPassword" name="password" type="password" autocomplete="current-password" required minlength="8" maxlength="128"></label>
+        <button class="button primary" type="submit">Sign in</button>
+      </form>
+      <form id="registerForm" class="stack hidden">
+        <label>Full name<input id="registerName" type="text" autocomplete="name" required minlength="2" maxlength="100"></label>
+        <label>Email<input id="registerEmail" type="email" autocomplete="email" required maxlength="254"></label>
+        <label>Password<input id="registerPassword" type="password" autocomplete="new-password" required minlength="10" maxlength="128"><small>Use at least 10 characters.</small></label>
+        <button class="button primary" type="submit">Create applicant account <span>↗</span></button>
+      </form>
+      <form id="resetForm" class="stack hidden">
+        <label>Account email<input id="resetEmail" type="email" autocomplete="email" required maxlength="254"></label>
+        <button class="button primary" type="submit">Send reset link <span>↗</span></button>
+      </form>
+      <form id="updatePasswordForm" class="stack hidden">
+        <label>New password<input id="newPassword" type="password" autocomplete="new-password" required minlength="10" maxlength="128"></label>
+        <label>Confirm new password<input id="confirmNewPassword" type="password" autocomplete="new-password" required minlength="10" maxlength="128"></label>
+        <button class="button primary" type="submit">Update password <span>↗</span></button>
+      </form>
+      <p id="authMessage" class="notice" role="status" aria-live="polite"></p>
+      <div class="auth-links"><button type="button" data-auth-mode="register">Create applicant account</button><button type="button" data-auth-mode="reset">Forgot password?</button><button type="button" data-auth-mode="login" class="hidden" id="backToLogin">Back to sign in</button></div>
+      <div class="demo-entry">
+        <button id="demoModeButton" class="button secondary" type="button">Try the interactive demo</button>
+        <p class="muted">Demo records stay in this browser.</p>
+      </div>
+      <footer>Created by <strong>Gigson Aquino</strong></footer>
+    </section>
+  </div>
+  <div id="appShell" class="app-shell hidden">
+    <aside id="sidebar" class="sidebar">
+      <div class="brand"><span class="brand-mark">R</span><span><b>Recruitment</b><small>Management System</small></span></div>
+      <p class="micro nav-label">WORKSPACE</p><nav id="navigation" aria-label="Main navigation"></nav>
+      <div class="sidebar-bottom"><span class="micro">SIGNED IN AS</span><b id="sidebarName">Account</b><span class="muted" id="sidebarRole">Role</span><button id="signOutButton" class="nav-button">↪ Sign out</button></div>
+    </aside>
+    <div id="mobileOverlay" class="mobile-overlay"></div>
+    <main class="main-area"><header class="topbar"><button id="menuButton" class="icon-button" aria-label="Open navigation" aria-expanded="false">☰</button><div class="topbar-actions">
+        <div id="demoTools" class="demo-tools hidden" hidden>
+          <label class="visually-hidden" for="demoRoleSelect">Demo role</label>
+          <select id="demoRoleSelect" aria-label="Switch sample role">
+            <option>Administrator</option><option>HR Staff</option><option>HR Officer</option><option>Recruiter</option><option>Interviewer</option><option>Hiring Manager</option><option>Management</option><option>Applicant</option>
+          </select>
+          <button id="resetDemoButton" class="icon-button" type="button" title="Reset sample data" aria-label="Reset sample data">↻</button>
+        </div>
+        <button id="themeButton" class="icon-button" aria-label="Cycle color theme">◐</button><span class="user-chip" id="userChip">Account</span>
+      </div></header>
+      <div id="demoBanner" class="demo-banner hidden" hidden><strong>DEMO MODE</strong><span>Local sample data only — not connected to Supabase.</span></div>
+      <section class="page-content"><div id="pageRoot" aria-live="polite"></div></section>
+      <footer class="app-footer">Recruitment Management System <span>·</span> Created by <strong>Gigson Aquino</strong></footer>
+    </main>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <dialog id="recordDialog" class="dialog"><form id="recordForm"><div class="dialog-head"><div><span class="micro" id="dialogEyebrow">RECORD</span><h2 id="dialogTitle">Create record</h2></div><button class="icon-button" type="button" data-dialog-close aria-label="Close">×</button></div><div id="dialogFields" class="stack"></div><p id="dialogMessage" class="notice"></p><div class="dialog-actions"><button class="button secondary" type="button" data-dialog-close>Cancel</button><button class="button primary" id="dialogSave" type="submit">Save</button></div></form></dialog>
+</body></html>
