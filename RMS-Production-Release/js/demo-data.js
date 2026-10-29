@@ -1,5 +1,5 @@
 window.RMSDemoTools = function (dependencies) {
-    const { state, roles, localDate, showApp, toast } = dependencies;
+    const { state, roles, access, localDate, showApp, toast } = dependencies;
     const DEMO_DB_KEY = 'rms-functional-demo-db-v2';
     const DEMO_SESSION_KEY = 'rms-functional-demo-session-v1';
     const DEMO_PRIMARY_KEYS = {

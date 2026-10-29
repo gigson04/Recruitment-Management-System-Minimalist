@@ -60,7 +60,7 @@
         throw new Error('Your Supabase sign-in succeeded, but no matching public.users or public.applicants account row exists. An administrator must link this account before it can use the applicant workspace.'); if (String(data.status || '').toLowerCase() !== 'active')
         throw new Error('This account is inactive. Contact the system administrator.'); if (!roles.includes(data.role))
         throw new Error(`Unrecognized account role: ${data.role}. Contact the system administrator.`); return data; }
-    async function establishSession(session) { if (!session?.user)
+    async function establishSession(session) { if (state.isDemo || !session?.user)
         return; const userId = session.user.id; try {
         message($('#authMessage'), 'Signed in. Loading your account…');
         state.user = session.user;
@@ -98,7 +98,7 @@
         saveMyProfile, renderApplications, renderScreening, renderInterviews,
         renderHiring, renderEmployees, convertEmployee, renderUsers,
         renderReports, renderManuals } = pageViews;
-    const demoTools = window.RMSDemoTools({ state, roles, localDate, showApp, toast });
+    const demoTools = window.RMSDemoTools({ state, roles, access, localDate, showApp, toast });
     const DEMO_SESSION_KEY = demoTools.sessionKey;
     const { enterDemo, resetDemo } = demoTools;
     let pageRenderId = 0;
@@ -320,7 +320,7 @@
         const jobs = state.jobs.filter(j => `${j.title} ${j.department || ''} ${j.employment_type || ''} ${j.description || ''} ${j.qualifications || ''}`.toLowerCase().includes(term));
         $('#jobTable').innerHTML = table('', ['POSITION', 'TYPE', 'DEADLINE', 'STATUS', 'ACTION'], jobRows(jobs, state.profile.role === 'Applicant'), 'No matching positions', 'Try a different search.');
     } });
-    $('#loginForm').addEventListener('submit', async (e) => { e.preventDefault(); const form = e.currentTarget, b = $('button[type="submit"]', form), originalButton = b.innerHTML; b.disabled = true; form.setAttribute('aria-busy', 'true'); b.textContent = 'Signing in…'; message($('#authMessage'), 'Signing in…'); let timer; try {
+    $('#loginForm').addEventListener('submit', async (e) => { e.preventDefault(); if (state.isDemo) { state.isDemo = false; state.client = state.realClient; state.user = null; state.profile = null; } const auth = state.client?.auth; if (typeof auth?.signInWithPassword !== 'function') { message($('#authMessage'), 'The sign-in service is unavailable. Reload the page and try again.', true); return; } const form = e.currentTarget, b = $('button[type="submit"]', form), originalButton = b.innerHTML; b.disabled = true; form.setAttribute('aria-busy', 'true'); b.textContent = 'Signing in…'; message($('#authMessage'), 'Signing in…'); let timer; try {
         const result = await Promise.race([state.client.auth.signInWithPassword({ email: $('#loginEmail').value.trim(), password: $('#loginPassword').value }), new Promise((_, reject) => { timer = setTimeout(() => { const error = new Error('Supabase Auth request timed out.'); error.name = 'TimeoutError'; reject(error); }, 12000); })]);
         if (result.error)
             throw result.error;
@@ -385,7 +385,7 @@
     $('#menuButton').addEventListener('click', () => { const open = $('#sidebar').classList.toggle('open'); $('#mobileOverlay').classList.toggle('show', open); $('#menuButton').setAttribute('aria-expanded', String(open)); });
     $('#mobileOverlay').addEventListener('click', () => { $('#sidebar').classList.remove('open'); $('#mobileOverlay').classList.remove('show'); $('#menuButton').setAttribute('aria-expanded', 'false'); });
     $('#themeButton').addEventListener('click', () => { const root = document.documentElement; const current = root.dataset.theme; const next = current === 'light' ? 'dark' : current === 'dark' ? 'system' : 'light'; root.dataset.theme = next; localStorage.setItem('rms-theme', next); toast(`Theme: ${next}`); });
-    $('#demoModeButton').addEventListener('click', () => enterDemo('Administrator'));
+    $('#demoModeButton').addEventListener('click', () => { try { enterDemo('Administrator'); } catch (error) { console.error('Interactive demo could not start:', error); state.isDemo = false; state.client = state.realClient; state.user = null; state.profile = null; showAuth('login', `Interactive demo could not start: ${friendly(error)}`); } });
     $('#demoRoleSelect').addEventListener('change', (e) => enterDemo(e.target.value));
     $('#resetDemoButton').addEventListener('click', resetDemo);
     $('#recordDialog').addEventListener('click', (e) => { if (e.target.closest('[data-dialog-close]')) {
@@ -433,5 +433,5 @@
         await establishSession(data.session);
     else
         showAuth('login'); }
-    boot().catch(e => { console.error(e); showAuth('login', friendly(e)); });
+    boot().catch(e => { if (state.isDemo) return; console.error(e); showAuth('login', friendly(e)); });
 })();
