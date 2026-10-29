@@ -11,7 +11,7 @@ The UI and recruitment actions have been exercised in Chromium with the app disc
 ## Fixes made in this build
 
 - Added a local interactive demo mode with seeded fake records, role switching, and reset. All demo changes stay in this browser's local storage and do not call Supabase.
-- Added a one-click Windows launcher (`START-RMS.bat`) and standard-library `start_rms.py`; the server binds only to `127.0.0.1` and chooses a free port.
+- Local run instructions use Python's standard-library `http.server` bound to `127.0.0.1`; no project-specific server script is required.
 - Added HR Officer to the role selector and removed a post-login mapping that silently changed HR Officer to HR Staff.
 - Updated applicant signup metadata to send `account_type: Applicant`, matching the applicant-only Auth trigger in `sql/applicant-self-registration.sql`.
 - Corrected the demo applicant-to-user link and moved demo storage to a new versioned key so old sample data cannot keep a stale link.
@@ -59,4 +59,4 @@ The UI and recruitment actions have been exercised in Chromium with the app disc
 
 ## Test boundary
 
-The browser smoke test used the app source and a browser storage shim because this build environment could not reach the configured Supabase endpoint and its embedded browser runner blocked direct page navigation. Chromium verified the local UI/demo path, not live Supabase Auth, SQL execution, database writes, or RLS. The separate local server launcher is also checked with HTTP requests; a full live browser test still must be done on the user's machine with their project reachable. Do not treat this report as a production security certification.
+The browser smoke test used the app source and a browser storage shim because this build environment could not reach the configured Supabase endpoint and its embedded browser runner blocked direct page navigation. Chromium verified the local UI/demo path, not live Supabase Auth, SQL execution, database writes, or RLS. A prior launcher was checked with HTTP requests and was subsequently removed; the current instructions use Python's standard-library server. A full live browser test still must be done with the configured project reachable. Do not treat this report as a production security certification.

@@ -7,7 +7,7 @@
 ## Implemented in this release
 
 - Responsive single-page workspace with mobile navigation and light/dark/system theme modes.
-- Interactive local demo with fake data, eight-role switching, sample-data reset, and a one-click Windows launcher.
+- Interactive local demo with fake data, eight-role switching, and sample-data reset. Use Python's built-in server command in `status/START-HERE.md` to run it locally.
 - Supabase Auth sign-in, applicant signup form, password reset, password update, sign-out, inactive-account check.
 - Role-aware navigation for Administrator, HR Officer/Staff, Recruiter, Interviewer, Hiring Manager, Management, and Applicant.
 - Job posting create/edit/close/reopen, applicant-facing job search/details, application submission/tracking and search/no-results states.
@@ -39,3 +39,16 @@
 - Do not use real applicant data until role-isolation, privacy, backup/recovery, and UAT checks pass.
 
 This is a static release candidate prepared against the supplied manual and the existing legacy-table approach. It is not a claim of live deployment or production security certification.
+
+## Follow-up work completed (29 October 2026)
+
+- Split JavaScript actions into lab-group modules for Labs 3–9, 10–15, and 16–18; each HTML page loads these modules before the shared action registry.
+
+- Added the exact Lab 37 17-step sequence, stop conditions, and a link from the in-app user guide.
+- Aligned application stage labels with the manual and prevented direct edits to workflow-managed stages. Interview scheduling now requires a Qualified screening, and a new interview must be scheduled before it can be evaluated.
+- Added migration triggers that enforce application status order, require selection before a hiring decision, and require employee conversion to match a Hired application. The SQL has not been executed against PostgreSQL here; staging tests are still required.
+- Added visible application-validation confirmation and explicit interview schedule/conduct/evaluation guidance.
+- Added department, employment type, and status filters to job search; added per-job vacancy/application/hiring reports, applicant status/position/qualified/rejected/hired reports, time-to-hire and vacancy metrics, and seven dashboard charts.
+- Removed the standalone Python launcher and its dependent batch files and tests at the user's request. Local runs use Python's built-in `http.server` command.
+- `status/verify_release.ps1`: 295 structural checks passed after launcher removal. Node.js was not installed, so current JavaScript syntax parsing was skipped.
+- Live Supabase, browser, RLS, migration, and database backup/restore tests remain unverified.

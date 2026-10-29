@@ -7,6 +7,7 @@ The app uses the original RMS table family: `users`, `job_postings`, `applicants
 1. Make a fresh Supabase backup before changing the schema.
 2. Confirm that the existing database has the original RMS tables listed above. This release does not include the original base-schema file; do not recreate or replace a database that contains your current data.
 3. In the Supabase SQL Editor, review and run `existing-project-extension.sql`. It is the additive migration copied from the existing multi-page RMS and adjusted for the status values used by this application. It adds the applicant/Auth link, saved screening rubric, employee table, status history, and role-aware RLS policies.
+   It also adds database triggers that reject out-of-order application stage changes and employee records without a matching Hired application.
 4. Review and run `applicant-self-registration.sql` to create the Auth signup trigger and policies. The app marks self-service signups with `account_type: Applicant`, and the trigger only auto-creates/links records for those accounts; staff accounts are not downgraded to Applicant.
 5. Test with fake accounts for each role before using real applicant data.
 

@@ -35,7 +35,7 @@ window.RMSDemoTools = function (dependencies) {
         ];
         const applications = [
             { application_id: 'demo-application-1', applicant_id: applicants[0].applicant_id, job_id: jobs[0].job_id, cover_letter: 'I am excited to start my web development career.', application_date: today, status: 'Submitted', created_at: now, updated_at: now },
-            { application_id: 'demo-application-2', applicant_id: applicants[1].applicant_id, job_id: jobs[1].job_id, cover_letter: 'I am interested in supporting the HR team.', application_date: today, status: 'Interview', created_at: now, updated_at: now }
+            { application_id: 'demo-application-2', applicant_id: applicants[1].applicant_id, job_id: jobs[1].job_id, cover_letter: 'I am interested in supporting the HR team.', application_date: today, status: 'Interviewed', created_at: now, updated_at: now }
         ];
         return {
             users: userRoles,

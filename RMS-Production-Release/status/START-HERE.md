@@ -6,20 +6,25 @@ This folder contains the remodeled, minimalist RMS and a local interactive demo.
 
 1. Extract the ZIP completely.
 2. Open the `RMS-Production-Release` folder.
-3. Double-click **`START-RMS.bat`**. It starts a Python 3 web server on your own computer and opens the app in your browser.
-4. Leave the black terminal window open while using RMS. Close it with **Ctrl+C** when you are done.
+3. From the project root, run **`py -3 -m http.server 8000 --bind 127.0.0.1`** in a terminal.
+4. Open `http://127.0.0.1:8000/index.html` in your browser. Keep the terminal open and press **Ctrl+C** when finished.
 5. On the sign-in screen, select **Open interactive demo** to test all local sample workflows. Use the role selector at the top to switch between Administrator, HR Staff, HR Officer, Recruiter, Interviewer, Hiring Manager, Management, and Applicant.
 
-If Windows says Python is not installed, install Python 3 and enable the installer option that adds Python to PATH. Alternatively, open a terminal in this folder and run `py -3 start_rms.py` or `python start_rms.py`.
+If Windows says Python is not installed, install Python 3 and enable the installer option that adds Python to PATH. On macOS/Linux, run `python3 -m http.server 8000 --bind 127.0.0.1` instead.
 
 ## 2. Demo mode vs real Supabase
 
 - **Interactive demo:** stores only fake sample records in this browser's local storage. Creating and editing demo records does not change your actual database.
 - **Real sign-in:** requires internet access, the configured Supabase project, valid user accounts, and compatible database/RLS setup. Demo mode is not a replacement for authentication or production data.
 
-The local server makes browser routing and Supabase authentication behave more reliably than opening `index.html` directly. If you use password-reset emails with a local URL, add the exact local URL shown by the launcher to Supabase's allowed redirect URLs.
+The local server makes browser routing and Supabase authentication behave more reliably than opening `index.html` directly. If you use password-reset emails, add `http://127.0.0.1:8000/index.html` to Supabase's allowed redirect URLs.
 
 ## 3. Important files
+
+- `js/labs/lab-03-09-jobs-applications.js` — job and application actions
+- `js/labs/lab-10-15-screening-interviews.js` — screening and interview actions
+- `js/labs/lab-16-18-hiring-employees.js` — selection, hiring, and user actions
+- `js/record-actions.js` — shared registry for the lab-group modules
 
 - `index.html` — screen structure, account forms, and app shell
 - `css/app.css` — responsive monochrome interface and theme styles

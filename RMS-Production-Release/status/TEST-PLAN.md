@@ -32,6 +32,16 @@ Use a staging database and fake test identities. Do not use real applicant data 
 | IT-06 | Create/update records → dashboard/reports | Counts reflect the changes | Pending live test |
 | IT-07 | Close or expire job → applicant tries to apply | Database rejects the submission | Pending live test |
 
+## Workflow stage assertions
+
+For integration checks, verify the application status sequence after each successful action:
+
+`Submitted` -> `Qualified` or `Rejected` -> `For Interview` -> `Interviewed` or `Rejected` -> `Selected` -> `Hired` or `Rejected`.
+
+The UI must not permit an operator to set a later stage directly. Selection requires a Qualified screening plus a Passed, Completed interview; hiring requires a selected application; employee conversion requires a Hired decision. Mark these cases as passed only after exercising them in the demo and staging database.
+
+The additive SQL migration now adds database triggers for application stage order, hiring decisions, and employee conversion. In staging, also attempt direct REST updates that skip each gate; they must fail with a constraint error. Do not call this check passed from a source review alone.
+
 ## Role-based security tests
 
 Create separate accounts for Administrator, HR Staff, Recruiter, Interviewer, Hiring Manager, Management, Applicant A, and Applicant B.
@@ -63,17 +73,24 @@ Create separate accounts for Administrator, HR Staff, Recruiter, Interviewer, Hi
 
 ## Final demonstration sequence (manual Lab 37)
 
-1. Sign in as authorized staff.
-2. Create an open job posting.
-3. Register an applicant and create/link the applicant's Auth account.
-4. Sign in as that applicant and submit an application.
-5. Show application tracking.
-6. Screen the applicant; demonstrate rubric total calculation.
-7. Schedule and evaluate the interview.
-8. Record the hiring decision.
-9. Convert the hired applicant into an employee.
-10. Show reports and dashboard changes.
-11. Demonstrate the backup and restore procedure.
-12. Sign out.
+Run the demonstration in this order, using one linked applicant and one job throughout. Use a staging database or the clearly labeled local demo with fake data. The applicant must have a separate Applicant login for step 4.
 
-Record screenshots and actual results for the lab submission. Do not mark tests as passed before running them.
+1. **Login** as authorized recruitment staff.
+2. **Create Job Posting** and confirm the job is Open with a future closing date.
+3. **Register Applicant** and link the applicant record to the Applicant Auth account.
+4. **Applicant Applies** by signing in as that applicant and opening the application form for the job from step 2. Leave it open without submitting.
+5. **Validate Application** by showing the complete profile, open job, valid deadline, and no duplicate in the form's validation confirmation. After showing the pass, submit the application.
+6. **Screen Applicant** by opening the submitted application and entering the screening rubric.
+7. **Determine Screening Result** by showing the calculated total and Qualified/Not Qualified outcome. Continue only when Qualified.
+8. **Schedule Interview** for that qualified application.
+9. **Conduct Interview** with the applicant at the scheduled time (explain this real-world action; it is not a separate database transaction).
+10. **Record Interview Evaluation** by entering all rubric scores, saving the Passed result, and marking the interview Completed.
+11. **Select Applicant** only after the qualified screening and passed completed interview are visible.
+12. **Record Hiring Decision** for the selected application and save the approved Hired decision.
+13. **Convert Applicant to Employee** and show the employee record linked to the hired application.
+14. **Generate Recruitment Reports** and show the updated pipeline and hiring totals.
+15. **Display Dashboard** and show the updated summary counts.
+16. **Backup Database** using the approved backup procedure; record the backup and restore verification result. A local demo uses browser storage and is not a database backup.
+17. **Logout** and confirm the signed-in workspace is closed.
+
+Record screenshots and actual results for the lab submission. Do not mark tests as passed before running them. Keep the order above; do not skip a gate when the earlier result is missing or failed.

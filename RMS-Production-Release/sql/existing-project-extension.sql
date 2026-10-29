@@ -180,6 +180,142 @@ for each row execute function public.log_application_status_change();
 create trigger trg_application_status_history after update of status on public.applications
 for each row execute function public.log_application_status_change();
 
+-- Enforce the Lab 37 recruitment sequence at the database boundary as well as
+-- in the browser. Workflow-owned stages can advance only after their evidence
+-- records exist; Rejected/Withdrawn remain valid terminal outcomes.
+create or replace function public.enforce_application_workflow_order()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  latest_screening_result text;
+  has_scheduled_interview boolean;
+  has_passed_interview boolean;
+  has_hired_decision boolean;
+begin
+  if tg_op = 'INSERT' then
+    new.status := coalesce(new.status, 'Submitted');
+    if new.status <> 'Submitted' then
+      raise exception 'An application must start at Submitted.' using errcode = '23514';
+    end if;
+    return new;
+  end if;
+
+  if new.status is not distinct from old.status then return new; end if;
+  if new.status in ('Rejected', 'Withdrawn') then
+    if old.status in ('Hired', 'Rejected', 'Withdrawn') then
+      raise exception 'A closed application cannot change status.' using errcode = '23514';
+    end if;
+    return new;
+  end if;
+
+  select s.result into latest_screening_result
+  from public.screenings s
+  where s.application_id = new.application_id
+  order by s.created_at desc nulls last, s.screening_id desc
+  limit 1;
+
+  select exists (
+    select 1 from public.interviews i
+    where i.application_id = new.application_id and i.status in ('Scheduled', 'Rescheduled')
+  ) into has_scheduled_interview;
+
+  select exists (
+    select 1 from public.interviews i
+    where i.application_id = new.application_id and i.status = 'Completed' and i.result = 'Passed'
+  ) into has_passed_interview;
+
+  select exists (
+    select 1 from public.hiring h
+    where h.application_id = new.application_id and h.status = 'Hired'
+  ) into has_hired_decision;
+
+  if new.status = 'Under Screening' then
+    if old.status <> 'Submitted' then raise exception 'Screening can start only after submission.' using errcode = '23514'; end if;
+  elsif new.status = 'Qualified' then
+    if old.status not in ('Submitted', 'Under Screening', 'Screening') or latest_screening_result is distinct from 'Qualified' then
+      raise exception 'A Qualified application requires a Qualified screening result.' using errcode = '23514';
+    end if;
+  elsif new.status = 'For Interview' then
+    if old.status not in ('Qualified', 'Interviewed', 'For Interview', 'Interview') or latest_screening_result is distinct from 'Qualified' or not has_scheduled_interview then
+      raise exception 'Interview scheduling requires qualified screening and a scheduled interview.' using errcode = '23514';
+    end if;
+  elsif new.status = 'Interviewed' then
+    if old.status not in ('For Interview', 'Interview') or not has_passed_interview then
+      raise exception 'Interviewed status requires a Passed, Completed interview.' using errcode = '23514';
+    end if;
+  elsif new.status = 'Selected' then
+    if old.status <> 'Interviewed' or latest_screening_result is distinct from 'Qualified' or not has_passed_interview then
+      raise exception 'Selection requires qualified screening and a Passed, Completed interview.' using errcode = '23514';
+    end if;
+  elsif new.status = 'Hired' then
+    if old.status <> 'Selected' or not has_hired_decision then
+      raise exception 'Hired status requires a Selected application and Hired decision.' using errcode = '23514';
+    end if;
+  else
+    raise exception 'Application status must be advanced through the recruitment workflow.' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.enforce_application_workflow_order() from public;
+drop trigger if exists trg_enforce_application_insert_order on public.applications;
+drop trigger if exists trg_enforce_application_status_order on public.applications;
+create trigger trg_enforce_application_insert_order before insert on public.applications
+for each row execute function public.enforce_application_workflow_order();
+create trigger trg_enforce_application_status_order before update of status on public.applications
+for each row execute function public.enforce_application_workflow_order();
+
+create or replace function public.enforce_hiring_decision_order()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+declare
+  application_status text;
+begin
+  if tg_op = 'UPDATE' and new.application_id = old.application_id and new.status = old.status then
+    return new;
+  end if;
+  select a.status into application_status
+  from public.applications a
+  where a.application_id = new.application_id;
+  if application_status is distinct from 'Selected' then
+    raise exception 'A hiring decision requires a Selected application.' using errcode = '23514';
+  end if;
+  if tg_op = 'INSERT' and exists (
+    select 1 from public.hiring h where h.application_id = new.application_id
+  ) then
+    raise exception 'A hiring decision already exists for this application.' using errcode = '23505';
+  end if;
+  if new.status = 'Hired' and (
+    not exists (select 1 from public.screenings s where s.application_id = new.application_id and s.result = 'Qualified')
+    or not exists (select 1 from public.interviews i where i.application_id = new.application_id and i.status = 'Completed' and i.result = 'Passed')
+  ) then
+    raise exception 'Hiring requires qualified screening and a Passed, Completed interview.' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.enforce_hiring_decision_order() from public;
+drop trigger if exists trg_enforce_hiring_decision_order on public.hiring;
+create trigger trg_enforce_hiring_decision_order before insert or update of application_id, status on public.hiring
+for each row execute function public.enforce_hiring_decision_order();
+
+create or replace function public.enforce_employee_hiring_source()
+returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
+begin
+  if not exists (
+    select 1 from public.hiring h
+    join public.applications a on a.application_id = h.application_id
+    where h.application_id = new.application_id and h.status = 'Hired'
+      and a.applicant_id = new.applicant_id
+  ) then
+    raise exception 'An employee record requires the matching Hired application.' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+revoke all on function public.enforce_employee_hiring_source() from public;
+drop trigger if exists trg_enforce_employee_hiring_source on public.employees;
+create trigger trg_enforce_employee_hiring_source before insert or update of application_id, applicant_id on public.employees
+for each row execute function public.enforce_employee_hiring_source();
+
 create or replace function public.set_updated_at()
 returns trigger language plpgsql as $$ begin new.updated_at = now(); return new; end; $$;
 drop trigger if exists trg_interviews_updated_at on public.interviews;

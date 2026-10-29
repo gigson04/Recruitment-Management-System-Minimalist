@@ -289,6 +289,23 @@
         catch (error) { message(output, friendly(error), true); }
         finally { button.disabled = false; }
     });
+    function filterJobList() {
+        const term = ($('#jobSearch')?.value || '').trim().toLowerCase();
+        const department = $('#jobDepartmentFilter')?.value || '';
+        const type = $('#jobTypeFilter')?.value || '';
+        const status = $('#jobStatusFilter')?.value || '';
+        const jobs = state.jobs.filter(job =>
+            `${job.title} ${job.department || ''} ${job.employment_type || ''} ${job.description || ''} ${job.qualifications || ''}`.toLowerCase().includes(term) &&
+            (!department || job.department === department) &&
+            (!type || job.employment_type === type) &&
+            (!status || job.status === status)
+        );
+        const root = $('#jobTable');
+        if (root) root.innerHTML = table('', ['POSITION', 'TYPE', 'DEADLINE', 'STATUS', 'ACTION'], jobRows(jobs, state.profile.role === 'Applicant'), 'No matching positions', 'Try different search or filter options.');
+    }
+    document.addEventListener('change', e => {
+        if (['jobDepartmentFilter', 'jobTypeFilter', 'jobStatusFilter'].includes(e.target.id)) filterJobList();
+    });
     document.addEventListener('input', e => {
         if (e.target.matches('[data-screening-score]')) {
             const inputs = $$('#dialogFields [data-screening-score]');
@@ -315,11 +332,7 @@
         const records = state.applicants.filter(a => `${a.applicant_no || ''} ${a.first_name || ''} ${a.last_name || ''} ${a.email || ''}`.toLowerCase().includes(term));
         const rows = records.map(a => `<tr><td><strong>${esc([a.first_name, a.last_name].filter(Boolean).join(' ') || 'Applicant')}</strong><span class="subcell">${esc(a.applicant_no || 'No applicant number')}</span></td><td>${esc(a.email || '—')}<span class="subcell">${esc(a.contact_no || '')}</span></td><td>${esc(a.education || '—')}</td><td><span class="pill">${esc(a.status || 'Active')}</span></td><td><button class="action-link" data-action="edit-applicant" data-id="${esc(a.applicant_id)}">Edit profile</button></td></tr>`);
         $('#applicantTable').innerHTML = table('', ['APPLICANT', 'CONTACT', 'EDUCATION', 'STATUS', 'ACTION'], rows, 'No matching applicants', 'Try a different search.');
-    } if (e.target.id === 'jobSearch') {
-        const term = e.target.value.toLowerCase();
-        const jobs = state.jobs.filter(j => `${j.title} ${j.department || ''} ${j.employment_type || ''} ${j.description || ''} ${j.qualifications || ''}`.toLowerCase().includes(term));
-        $('#jobTable').innerHTML = table('', ['POSITION', 'TYPE', 'DEADLINE', 'STATUS', 'ACTION'], jobRows(jobs, state.profile.role === 'Applicant'), 'No matching positions', 'Try a different search.');
-    } });
+    } if (e.target.id === 'jobSearch') filterJobList(); });
     $('#loginForm').addEventListener('submit', async (e) => { e.preventDefault(); if (state.isDemo) { state.isDemo = false; state.client = state.realClient; state.user = null; state.profile = null; } const auth = state.client?.auth; if (typeof auth?.signInWithPassword !== 'function') { message($('#authMessage'), 'The sign-in service is unavailable. Reload the page and try again.', true); return; } const form = e.currentTarget, b = $('button[type="submit"]', form), originalButton = b.innerHTML; b.disabled = true; form.setAttribute('aria-busy', 'true'); b.textContent = 'Signing in…'; message($('#authMessage'), 'Signing in…'); let timer; try {
         const result = await Promise.race([state.client.auth.signInWithPassword({ email: $('#loginEmail').value.trim(), password: $('#loginPassword').value }), new Promise((_, reject) => { timer = setTimeout(() => { const error = new Error('Supabase Auth request timed out.'); error.name = 'TimeoutError'; reject(error); }, 12000); })]);
         if (result.error)
