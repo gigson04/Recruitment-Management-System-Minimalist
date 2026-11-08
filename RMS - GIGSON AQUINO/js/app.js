@@ -5,6 +5,12 @@
     const state = { client: null, realClient: null, user: null, profile: null, pendingSignup: false, isDemo: false, page: document.body.dataset.page || 'dashboard', jobs: [], applications: [], profiles: [], applicants: [], currentRows: [], pageCache: {}, theme: 'system' };
     let profileLoad = null;
     let activeAppViewKey = null;
+    let tutorialActive = false;
+    let tutorialSteps = [];
+    let tutorialIndex = 0;
+    let tutorialTarget = null;
+    let tutorialResizeHandler = null;
+    const tutorialSeenInSession = new Set();
     const SCREENING_PASS_SCORE = Number(window.RMS_CONFIG?.SCREENING_PASS_SCORE ?? 70);
     const INTERVIEW_PASS_SCORE = Number(window.RMS_CONFIG?.INTERVIEW_PASS_SCORE ?? 70);
     const automaticResult = (score, threshold, pass, fail) => Number.isFinite(Number(score)) && score !== '' && score != null ? (Number(score) >= threshold ? pass : fail) : 'Pending';
@@ -45,9 +51,92 @@
         throw timeout;
     } throw error; }).finally(() => { clearTimeout(timer); upstream?.removeEventListener('abort', abort); }); }
     function configured() { return window.RMS_CONFIG && /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(window.RMS_CONFIG.SUPABASE_URL) && window.RMS_CONFIG.SUPABASE_ANON_KEY && !window.RMS_CONFIG.SUPABASE_ANON_KEY.includes('YOUR_'); }
-    function showAuth(mode = 'login', msg = '') { state.pageCache = {}; activeAppViewKey = null; $('#startupScreen').classList.add('hidden'); $('#authScreen').classList.remove('hidden'); $('#appShell').classList.add('hidden'); $('#demoTools').classList.add('hidden'); $('#demoTools').hidden = true; $('#demoBanner').classList.add('hidden'); $('#demoBanner').hidden = true; $('#loginForm').classList.toggle('hidden', mode !== 'login'); $('#registerForm').classList.toggle('hidden', mode !== 'register'); $('#resetForm').classList.toggle('hidden', mode !== 'reset'); $('#updatePasswordForm').classList.toggle('hidden', mode !== 'update'); $('#authTitle').textContent = mode === 'register' ? 'Create account' : mode === 'reset' ? 'Reset password' : mode === 'update' ? 'Choose a new password' : 'Sign in'; $('#authSubtitle').textContent = mode === 'register' ? 'Create an applicant account to apply for open positions.' : mode === 'reset' ? 'We will email you a secure password reset link.' : mode === 'update' ? 'Choose a new password for your account.' : 'Sign in to continue to your workspace.'; $('#backToLogin').classList.toggle('hidden', mode === 'login'); $$('[data-auth-mode="register"],[data-auth-mode="reset"]').forEach(b => b.classList.toggle('hidden', mode !== 'login')); message($('#authMessage'), msg); }
+    function showAuth(mode = 'login', msg = '') { if (tutorialActive) closeTutorial(false); state.pageCache = {}; activeAppViewKey = null; $('#startupScreen').classList.add('hidden'); $('#authScreen').classList.remove('hidden'); $('#appShell').classList.add('hidden'); $('#demoTools').classList.add('hidden'); $('#demoTools').hidden = true; $('#demoBanner').classList.add('hidden'); $('#demoBanner').hidden = true; $('#loginForm').classList.toggle('hidden', mode !== 'login'); $('#registerForm').classList.toggle('hidden', mode !== 'register'); $('#resetForm').classList.toggle('hidden', mode !== 'reset'); $('#updatePasswordForm').classList.toggle('hidden', mode !== 'update'); $('#authTitle').textContent = mode === 'register' ? 'Create account' : mode === 'reset' ? 'Reset password' : mode === 'update' ? 'Choose a new password' : 'Sign in'; $('#authSubtitle').textContent = mode === 'register' ? 'Create an applicant account to apply for open positions.' : mode === 'reset' ? 'We will email you a secure password reset link.' : mode === 'update' ? 'Choose a new password for your account.' : 'Sign in to continue to your workspace.'; $('#backToLogin').classList.toggle('hidden', mode === 'login'); $$('[data-auth-mode="register"],[data-auth-mode="reset"]').forEach(b => b.classList.toggle('hidden', mode !== 'login')); message($('#authMessage'), msg); }
     function nav() { const list = (access[state.profile.role] || []); $('#navigation').innerHTML = list.map(key => `<a class="nav-button ${state.page === key ? 'active' : ''}" href="#${esc(key)}" data-page="${esc(key)}">${esc(titles[key] || key)}</a>`).join(''); }
     function showApp() { const viewKey = `${state.user?.id || 'demo'}:${state.profile?.role || ''}:${state.page}`; const shouldRender = activeAppViewKey !== viewKey; $('#startupScreen').classList.add('hidden'); $('#authScreen').classList.add('hidden'); $('#appShell').classList.remove('hidden'); $('#demoTools').classList.toggle('hidden', !state.isDemo); $('#demoTools').hidden = !state.isDemo; $('#demoBanner').classList.toggle('hidden', !state.isDemo); $('#demoBanner').hidden = !state.isDemo; if (state.isDemo) $('#demoRoleSelect').value = state.profile.role; $('#sidebarName').textContent = state.profile.full_name || state.user.email; $('#sidebarRole').textContent = state.profile.role; $('#userChip').textContent = state.profile.role; nav(); if (shouldRender) renderPage(); }
+    function tutorialStorageKey() { const identity = state.isDemo ? `demo-${state.profile?.role || 'user'}` : state.user?.id; return identity ? `rms-tutorial-seen-v1:${identity}` : ''; }
+    function tutorialPlan() {
+        const role = state.profile?.role || 'Applicant';
+        const firstPage = role === 'Applicant' || role === 'Recruiter' ? 'jobs' : role === 'Interviewer' ? 'interviews' : role === 'Management' ? 'reports' : role === 'Administrator' ? 'users' : 'applications';
+        const firstPageTitle = titles[firstPage];
+        const mobile = window.matchMedia('(max-width: 820px)').matches;
+        return [
+            { target: '.page-head', title: 'Welcome to your workspace', text: 'This is where you’ll work with recruitment records. The sections available to you depend on your role.' },
+            { target: mobile ? '#menuButton' : `[data-page="${firstPage}"]`, title: mobile ? 'Open your menu' : `Start with ${firstPageTitle}`, text: mobile ? `Tap the menu button to find ${firstPageTitle}. Your menu shows the sections available to your role.` : role === 'Applicant' ? 'Browse open roles here. When you apply, you can follow progress in My applications.' : role === 'Interviewer' ? 'Your interview schedule and evaluation forms are in this section.' : role === 'Management' ? 'Open Reports for a snapshot of current recruitment activity.' : role === 'Hiring Manager' ? 'Review candidate applications here before making a selection.' : role === 'Administrator' ? 'Manage staff and account roles here.' : 'Review submitted applications and move each one through the recruitment process.' },
+            { target: mobile ? '#themeButton' : '#navigation', title: mobile ? 'Choose your display' : 'Find the other sections', text: mobile ? 'Use this control to switch between the available color themes.' : 'Use these links to move between your dashboard and the other pages available to your role.' }
+        ];
+    }
+    function positionTutorialCard() {
+        const card = $('#tutorialCard');
+        if (!card || !tutorialTarget) return;
+        const rect = tutorialTarget.getBoundingClientRect();
+        const cardRect = card.getBoundingClientRect();
+        const gap = 16;
+        let top = rect.bottom + gap;
+        let placement = 'below';
+        if (top + cardRect.height > window.innerHeight - 12 && rect.top - cardRect.height - gap > 12) {
+            top = rect.top - cardRect.height - gap;
+            placement = 'above';
+        }
+        top = Math.max(12, Math.min(top, window.innerHeight - cardRect.height - 12));
+        const left = Math.max(12, Math.min(rect.left + rect.width / 2 - cardRect.width / 2, window.innerWidth - cardRect.width - 12));
+        card.style.top = `${top}px`;
+        card.style.left = `${left}px`;
+        card.dataset.placement = placement;
+        card.style.setProperty('--tutorial-arrow-x', `${Math.max(18, Math.min(rect.left + rect.width / 2 - left, cardRect.width - 18))}px`);
+    }
+    function closeTutorial(markSeen = true) {
+        if (markSeen) {
+            const key = tutorialStorageKey();
+            if (key) tutorialSeenInSession.add(key);
+            if (key) try { localStorage.setItem(key, '1'); } catch { /* Storage may be disabled. */ }
+        }
+        tutorialActive = false;
+        tutorialTarget?.classList.remove('tutorial-focus');
+        tutorialTarget = null;
+        if (tutorialResizeHandler) window.removeEventListener('resize', tutorialResizeHandler);
+        tutorialResizeHandler = null;
+        $('#tutorialCard')?.remove();
+    }
+    function renderTutorialCard() {
+        if (!tutorialActive) return;
+        const step = tutorialSteps[tutorialIndex];
+        const mobile = window.matchMedia('(max-width: 820px)').matches;
+        const targetSelector = mobile && tutorialIndex > 0 ? '#menuButton' : step.target;
+        const target = document.querySelector(targetSelector) || document.querySelector('.page-head');
+        if (!target) return closeTutorial();
+        tutorialTarget?.classList.remove('tutorial-focus');
+        tutorialTarget = target;
+        target.classList.add('tutorial-focus');
+        let card = $('#tutorialCard');
+        if (!card) {
+            card = document.createElement('section');
+            card.id = 'tutorialCard';
+            card.className = 'tutorial-card';
+            card.setAttribute('role', 'dialog');
+            card.setAttribute('aria-modal', 'false');
+            card.setAttribute('aria-labelledby', 'tutorialTitle');
+            document.body.append(card);
+        }
+        card.innerHTML = `<p class="tutorial-count">QUICK TOUR <span>·</span> CARD ${tutorialIndex + 1} OF ${tutorialSteps.length}</p><h2 id="tutorialTitle">${esc(step.title)}</h2><p class="tutorial-copy">${esc(step.text)}</p><div class="tutorial-actions"><button type="button" class="tutorial-skip" data-tutorial="skip">Skip tour</button><div><button type="button" class="button secondary" data-tutorial="back" ${tutorialIndex === 0 ? 'disabled' : ''}>Back</button><button type="button" class="button primary" data-tutorial="next">${tutorialIndex === tutorialSteps.length - 1 ? 'Finish' : 'Next'}</button></div></div>`;
+        requestAnimationFrame(() => {
+            positionTutorialCard();
+            card.querySelector('[data-tutorial="next"]')?.focus({ preventScroll: true });
+        });
+    }
+    function maybeStartTutorial() {
+        if (tutorialActive || !state.profile) return;
+        const key = tutorialStorageKey();
+        if (!key) return;
+        if (tutorialSeenInSession.has(key)) return;
+        try { if (localStorage.getItem(key)) return; } catch { /* Continue without a saved first-visit flag. */ }
+        tutorialSteps = tutorialPlan();
+        tutorialIndex = 0;
+        tutorialActive = true;
+        tutorialResizeHandler = () => renderTutorialCard();
+        window.addEventListener('resize', tutorialResizeHandler);
+        renderTutorialCard();
+    }
     async function loadProfile(user, session) { const headers = { apikey: window.RMS_CONFIG.SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`, Accept: 'application/json' }; async function readRows(path) { const response = await authFetch(`${window.RMS_CONFIG.SUPABASE_URL}/rest/v1/${path}`, { headers }); let body; try {
         body = await response.json();
     }
@@ -158,6 +247,7 @@
         if (renderId === pageRenderId && requestedPage === state.page) {
             root.innerHTML = html;
             state.pageCache[`${state.profile?.role || 'unknown'}:${requestedPage}`] = html;
+            maybeStartTutorial();
         }
     }
     catch (e) {
@@ -284,7 +374,17 @@
         setTimeout(() => URL.revokeObjectURL(url), 1000);
         toast('CSV export created. Handle applicant data securely.', 'success');
     }
-    document.addEventListener('click', async (e) => { const navLink = e.target.closest('[data-page]'); if (navLink) {
+    document.addEventListener('click', async (e) => { const tutorialButton = e.target.closest('[data-tutorial]'); if (tutorialButton) {
+        e.preventDefault();
+        const action = tutorialButton.dataset.tutorial;
+        if (action === 'skip') return closeTutorial();
+        if (action === 'back') tutorialIndex = Math.max(0, tutorialIndex - 1);
+        if (action === 'next') {
+            if (tutorialIndex >= tutorialSteps.length - 1) return closeTutorial();
+            tutorialIndex++;
+        }
+        return renderTutorialCard();
+    } if (tutorialActive && !e.target.closest('#tutorialCard')) closeTutorial(); const navLink = e.target.closest('[data-page]'); if (navLink) {
         e.preventDefault();
         const next = navLink.dataset.page;
         if (!(access[state.profile?.role] || []).includes(next))
@@ -300,6 +400,7 @@
     } const action = e.target.closest('[data-action]'); if (action)
         return handleAction(action); const auth = e.target.closest('[data-auth-mode]'); if (auth)
         return showAuth(auth.dataset.authMode); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && tutorialActive) closeTutorial(); });
     document.addEventListener('submit', async (e) => {
         if (e.target.id !== 'applicantProfileForm') return;
         e.preventDefault();
