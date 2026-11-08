@@ -2,8 +2,9 @@
     'use strict';
     const $ = (s, root = document) => root.querySelector(s);
     const $$ = (s, root = document) => [...root.querySelectorAll(s)];
-    const state = { client: null, realClient: null, user: null, profile: null, pendingSignup: false, isDemo: false, page: document.body.dataset.page || 'dashboard', jobs: [], applications: [], profiles: [], applicants: [], currentRows: [], theme: 'system' };
+    const state = { client: null, realClient: null, user: null, profile: null, pendingSignup: false, isDemo: false, page: document.body.dataset.page || 'dashboard', jobs: [], applications: [], profiles: [], applicants: [], currentRows: [], pageCache: {}, theme: 'system' };
     let profileLoad = null;
+    let activeAppViewKey = null;
     const SCREENING_PASS_SCORE = Number(window.RMS_CONFIG?.SCREENING_PASS_SCORE ?? 70);
     const INTERVIEW_PASS_SCORE = Number(window.RMS_CONFIG?.INTERVIEW_PASS_SCORE ?? 70);
     const automaticResult = (score, threshold, pass, fail) => Number.isFinite(Number(score)) && score !== '' && score != null ? (Number(score) >= threshold ? pass : fail) : 'Pending';
@@ -33,7 +34,7 @@
         return m.slice(0, 240);
     };
     // The page, demo, and record-action modules load before this controller.
-    function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove('show'), 3800); }
+    function toast(msg, kind = 'info') { const t = $('#toast'); t.textContent = msg; t.dataset.kind = kind; t.classList.add('show'); clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove('show'), 3800); }
     function message(el, msg, isError = false) { el.textContent = msg; el.classList.toggle('error', isError); }
     function authFetch(input, init = {}) { const controller = new AbortController(), upstream = init.signal; let timedOut = false; const abort = () => controller.abort(upstream?.reason); if (upstream?.aborted)
         abort();
@@ -44,9 +45,9 @@
         throw timeout;
     } throw error; }).finally(() => { clearTimeout(timer); upstream?.removeEventListener('abort', abort); }); }
     function configured() { return window.RMS_CONFIG && /^https:\/\/[a-z0-9-]+\.supabase\.co$/i.test(window.RMS_CONFIG.SUPABASE_URL) && window.RMS_CONFIG.SUPABASE_ANON_KEY && !window.RMS_CONFIG.SUPABASE_ANON_KEY.includes('YOUR_'); }
-    function showAuth(mode = 'login', msg = '') { $('#startupScreen').classList.add('hidden'); $('#authScreen').classList.remove('hidden'); $('#appShell').classList.add('hidden'); $('#demoTools').classList.add('hidden'); $('#demoTools').hidden = true; $('#demoBanner').classList.add('hidden'); $('#demoBanner').hidden = true; $('#loginForm').classList.toggle('hidden', mode !== 'login'); $('#registerForm').classList.toggle('hidden', mode !== 'register'); $('#resetForm').classList.toggle('hidden', mode !== 'reset'); $('#updatePasswordForm').classList.toggle('hidden', mode !== 'update'); $('#authTitle').textContent = mode === 'register' ? 'Create account' : mode === 'reset' ? 'Reset password' : mode === 'update' ? 'Choose a new password' : 'Sign in'; $('#authSubtitle').textContent = mode === 'register' ? 'Create an applicant account to apply for open positions.' : mode === 'reset' ? 'We will email you a secure password reset link.' : mode === 'update' ? 'Choose a new password for your account.' : 'Sign in to continue to your workspace.'; $('#backToLogin').classList.toggle('hidden', mode === 'login'); $$('[data-auth-mode="register"],[data-auth-mode="reset"]').forEach(b => b.classList.toggle('hidden', mode !== 'login')); message($('#authMessage'), msg); }
+    function showAuth(mode = 'login', msg = '') { state.pageCache = {}; activeAppViewKey = null; $('#startupScreen').classList.add('hidden'); $('#authScreen').classList.remove('hidden'); $('#appShell').classList.add('hidden'); $('#demoTools').classList.add('hidden'); $('#demoTools').hidden = true; $('#demoBanner').classList.add('hidden'); $('#demoBanner').hidden = true; $('#loginForm').classList.toggle('hidden', mode !== 'login'); $('#registerForm').classList.toggle('hidden', mode !== 'register'); $('#resetForm').classList.toggle('hidden', mode !== 'reset'); $('#updatePasswordForm').classList.toggle('hidden', mode !== 'update'); $('#authTitle').textContent = mode === 'register' ? 'Create account' : mode === 'reset' ? 'Reset password' : mode === 'update' ? 'Choose a new password' : 'Sign in'; $('#authSubtitle').textContent = mode === 'register' ? 'Create an applicant account to apply for open positions.' : mode === 'reset' ? 'We will email you a secure password reset link.' : mode === 'update' ? 'Choose a new password for your account.' : 'Sign in to continue to your workspace.'; $('#backToLogin').classList.toggle('hidden', mode === 'login'); $$('[data-auth-mode="register"],[data-auth-mode="reset"]').forEach(b => b.classList.toggle('hidden', mode !== 'login')); message($('#authMessage'), msg); }
     function nav() { const list = (access[state.profile.role] || []); $('#navigation').innerHTML = list.map(key => `<a class="nav-button ${state.page === key ? 'active' : ''}" href="#${esc(key)}" data-page="${esc(key)}">${esc(titles[key] || key)}</a>`).join(''); }
-    function showApp() { $('#startupScreen').classList.add('hidden'); $('#authScreen').classList.add('hidden'); $('#appShell').classList.remove('hidden'); $('#demoTools').classList.toggle('hidden', !state.isDemo); $('#demoTools').hidden = !state.isDemo; $('#demoBanner').classList.toggle('hidden', !state.isDemo); $('#demoBanner').hidden = !state.isDemo; if (state.isDemo) $('#demoRoleSelect').value = state.profile.role; $('#sidebarName').textContent = state.profile.full_name || state.user.email; $('#sidebarRole').textContent = state.profile.role; $('#userChip').textContent = state.profile.role; nav(); renderPage(); }
+    function showApp() { const viewKey = `${state.user?.id || 'demo'}:${state.profile?.role || ''}:${state.page}`; const shouldRender = activeAppViewKey !== viewKey; $('#startupScreen').classList.add('hidden'); $('#authScreen').classList.add('hidden'); $('#appShell').classList.remove('hidden'); $('#demoTools').classList.toggle('hidden', !state.isDemo); $('#demoTools').hidden = !state.isDemo; $('#demoBanner').classList.toggle('hidden', !state.isDemo); $('#demoBanner').hidden = !state.isDemo; if (state.isDemo) $('#demoRoleSelect').value = state.profile.role; $('#sidebarName').textContent = state.profile.full_name || state.user.email; $('#sidebarRole').textContent = state.profile.role; $('#userChip').textContent = state.profile.role; nav(); if (shouldRender) renderPage(); }
     async function loadProfile(user, session) { const headers = { apikey: window.RMS_CONFIG.SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}`, Accept: 'application/json' }; async function readRows(path) { const response = await authFetch(`${window.RMS_CONFIG.SUPABASE_URL}/rest/v1/${path}`, { headers }); let body; try {
         body = await response.json();
     }
@@ -107,9 +108,9 @@
         const root = $('#pageRoot');
         const renderId = ++pageRenderId;
         const requestedPage = state.page;
-        // Keep the current screen visible while the next section loads.
-        // Show the loading message only on the first render.
-        if (!root.innerHTML.trim()) root.innerHTML = '<div class="panel panel-pad muted">Loading live data…</div>';
+        activeAppViewKey = `${state.user?.id || 'demo'}:${state.profile?.role || ''}:${requestedPage}`;
+        // Show the page structure while its live records load.
+        root.innerHTML = loadingSkeleton();
         root.setAttribute('aria-busy', 'true');
         try {
         let html;
@@ -154,21 +155,34 @@
             default: html = await renderDashboard();
         }
         // Ignore a slower request if the user has already opened another section.
-        if (renderId === pageRenderId && requestedPage === state.page) root.innerHTML = html;
+        if (renderId === pageRenderId && requestedPage === state.page) {
+            root.innerHTML = html;
+            state.pageCache[`${state.profile?.role || 'unknown'}:${requestedPage}`] = html;
+        }
     }
     catch (e) {
-        if (renderId === pageRenderId && requestedPage === state.page) root.innerHTML = `${pageHead(titles[requestedPage] || 'Workspace', 'Unable to load this page.')}<div class="panel panel-pad"><strong>Data could not be loaded.</strong><p class="muted">${esc(friendly(e))}</p><button class="button secondary" data-action="retry">Try again</button></div>`;
+        if (renderId === pageRenderId && requestedPage === state.page) {
+            const cachedPage = !navigator.onLine && state.pageCache[`${state.profile?.role || 'unknown'}:${requestedPage}`];
+            if (cachedPage) {
+                root.innerHTML = `<section class="offline-stale" role="status"><div><strong>You are offline</strong><p>Showing the last version of this page from this session. Editing and saving require a connection.</p></div><button class="button secondary" data-action="retry">Reconnect and refresh</button></section><div class="offline-cached">${cachedPage}</div>`;
+                root.querySelectorAll('.offline-cached [data-action]').forEach(button => { button.disabled = true; });
+                return;
+            }
+            const guidance = navigator.onLine ? 'Check your connection or access, then try again. If this keeps happening, contact your administrator.' : 'You are offline. Reconnect to the internet, then try loading this page again.';
+            root.innerHTML = `${pageHead(titles[requestedPage] || 'Workspace', 'This page could not load its latest information.')}<section class="panel panel-pad state-error" role="alert"><span class="state-kicker">PAGE LOAD ERROR</span><h2>We could not load ${esc((titles[requestedPage] || 'this page').toLowerCase())}.</h2><p>${esc(friendly(e))}</p><p class="muted">${guidance}</p><button class="button primary" data-action="retry">Try again</button></section>`;
+        }
         console.error('RMS page load error:', e);
     } finally {
         if (renderId === pageRenderId) root.removeAttribute('aria-busy');
     } }
+    function loadingSkeleton() { return '<section class="loading-state" role="status" aria-label="Loading page"><span class="visually-hidden">Loading page content</span><div class="skeleton-heading"></div><div class="skeleton-copy"></div><div class="skeleton-stats"><i></i><i></i><i></i><i></i></div><div class="skeleton-panel"><i></i><i></i><i></i><i></i></div></section>'; }
     function field(name, label, type = 'text', required = true, value = '', options = []) { let input; if (type === 'select')
         input = `<select name="${name}" ${required ? 'required' : ''}>${options.map(o => { const ov = typeof o === 'object' ? o.value : o; const ol = typeof o === 'object' ? o.label : o; return `<option value="${esc(ov)}" ${String(value) === String(ov) ? 'selected' : ''}>${esc(ol)}</option>`; }).join('')}</select>`;
     else if (type === 'textarea')
         input = `<textarea name="${name}" rows="4" maxlength="5000" ${required ? 'required' : ''}>${esc(value)}</textarea>`;
     else
         input = `<input name="${name}" type="${type}" value="${esc(value)}" ${required ? 'required' : ''} ${type === 'number' ? 'min="0" max="100000000"' : ''} ${type === 'date' ? '' : ''} maxlength="5000">`; return `<label>${esc(label)}${input}</label>`; }
-    function openDialog(title, fields, save, eyebrow = 'RECORD') { const d = $('#recordDialog'); $('#dialogTitle').textContent = title; $('#dialogEyebrow').textContent = eyebrow; $('#dialogFields').innerHTML = fields; message($('#dialogMessage'), ''); d.showModal(); state.dialogSave = save; }
+    function openDialog(title, fields, save, eyebrow = 'RECORD') { const d = $('#recordDialog'); $('#dialogSave').disabled = false; $('#dialogTitle').textContent = title; $('#dialogEyebrow').textContent = eyebrow; $('#dialogFields').innerHTML = fields; message($('#dialogMessage'), ''); d.showModal(); state.dialogSave = save; }
     const recordActions = window.RMSRecordActions({
         state, $, esc, roles, field, openDialog, toast, localDate, fetchJobs,
         applicationContext, renderPage, SCREENING_PASS_SCORE, INTERVIEW_PASS_SCORE,
@@ -219,6 +233,15 @@
             return convertEmployee();
         if (a === 'edit-user')
             return openUser(id, btn.dataset.role, btn.dataset.status, btn.dataset.name);
+        if (a === 'clear-job-filters') {
+            ['jobSearch', 'jobDepartmentFilter', 'jobTypeFilter', 'jobStatusFilter'].forEach(id => { const input = $(`#${id}`); if (input) input.value = ''; });
+            return filterJobList();
+        }
+        if (a === 'clear-applicant-search') {
+            const input = $('#applicantSearch');
+            if (input) input.value = '';
+            return input?.dispatchEvent(new Event('input', { bubbles: true }));
+        }
         if (a === 'retry')
             return renderPage();
         if (a === 'export-applications')
@@ -259,7 +282,7 @@
         link.download = 'applications.csv';
         link.click();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-        toast('CSV export created. Handle applicant data securely.');
+        toast('CSV export created. Handle applicant data securely.', 'success');
     }
     document.addEventListener('click', async (e) => { const navLink = e.target.closest('[data-page]'); if (navLink) {
         e.preventDefault();
@@ -301,7 +324,7 @@
             (!status || job.status === status)
         );
         const root = $('#jobTable');
-        if (root) root.innerHTML = table('', ['POSITION', 'TYPE', 'DEADLINE', 'STATUS', 'ACTION'], jobRows(jobs, state.profile.role === 'Applicant'), 'No matching positions', 'Try different search or filter options.');
+        if (root) root.innerHTML = table('', ['POSITION', 'TYPE', 'DEADLINE', 'STATUS', 'ACTION'], jobRows(jobs, state.profile.role === 'Applicant'), 'No matching positions', 'Try a shorter search or change the selected filters.', '<button class="button secondary" data-action="clear-job-filters">Clear search and filters</button>');
     }
     document.addEventListener('change', e => {
         if (['jobDepartmentFilter', 'jobTypeFilter', 'jobStatusFilter'].includes(e.target.id)) filterJobList();
@@ -331,7 +354,7 @@
         const term = e.target.value.toLowerCase();
         const records = state.applicants.filter(a => `${a.applicant_no || ''} ${a.first_name || ''} ${a.last_name || ''} ${a.email || ''}`.toLowerCase().includes(term));
         const rows = records.map(a => `<tr><td><strong>${esc([a.first_name, a.last_name].filter(Boolean).join(' ') || 'Applicant')}</strong><span class="subcell">${esc(a.applicant_no || 'No applicant number')}</span></td><td>${esc(a.email || '—')}<span class="subcell">${esc(a.contact_no || '')}</span></td><td>${esc(a.education || '—')}</td><td><span class="pill">${esc(a.status || 'Active')}</span></td><td><button class="action-link" data-action="edit-applicant" data-id="${esc(a.applicant_id)}">Edit profile</button></td></tr>`);
-        $('#applicantTable').innerHTML = table('', ['APPLICANT', 'CONTACT', 'EDUCATION', 'STATUS', 'ACTION'], rows, 'No matching applicants', 'Try a different search.');
+        $('#applicantTable').innerHTML = table('', ['APPLICANT', 'CONTACT', 'EDUCATION', 'STATUS', 'ACTION'], rows, 'No matching applicants', 'Check the spelling or search by name, number, or email.', '<button class="button secondary" data-action="clear-applicant-search">Clear search</button>');
     } if (e.target.id === 'jobSearch') filterJobList(); });
     $('#loginForm').addEventListener('submit', async (e) => { e.preventDefault(); if (state.isDemo) { state.isDemo = false; state.client = state.realClient; state.user = null; state.profile = null; } const auth = state.client?.auth; if (typeof auth?.signInWithPassword !== 'function') { message($('#authMessage'), 'The sign-in service is unavailable. Reload the page and try again.', true); return; } const form = e.currentTarget, b = $('button[type="submit"]', form), originalButton = b.innerHTML; b.disabled = true; form.setAttribute('aria-busy', 'true'); b.textContent = 'Signing in…'; message($('#authMessage'), 'Signing in…'); let timer; try {
         const result = await Promise.race([state.client.auth.signInWithPassword({ email: $('#loginEmail').value.trim(), password: $('#loginPassword').value }), new Promise((_, reject) => { timer = setTimeout(() => { const error = new Error('Supabase Auth request timed out.'); error.name = 'TimeoutError'; reject(error); }, 12000); })]);
@@ -417,6 +440,23 @@
     finally {
         b.disabled = false;
     } });
+    function updateConnectionBanner() {
+        let banner = $('#connectionBanner');
+        if (!navigator.onLine) {
+            if (!banner) {
+                banner = document.createElement('div');
+                banner.id = 'connectionBanner';
+                banner.className = 'connection-banner';
+                banner.setAttribute('role', 'status');
+                banner.textContent = 'You are offline. You can review this page and use local filters; live updates and saves need a connection.';
+                const topbar = $('.topbar');
+                if (topbar) topbar.after(banner);
+            }
+        } else if (banner) banner.remove();
+    }
+    window.addEventListener('offline', updateConnectionBanner);
+    window.addEventListener('online', updateConnectionBanner);
+    updateConnectionBanner();
     async function boot() { const saved = localStorage.getItem('rms-theme'); if (['light', 'dark', 'system'].includes(saved))
         document.documentElement.dataset.theme = saved;
     else

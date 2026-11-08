@@ -18,7 +18,7 @@ window.RMSJobApplicationActions = function (dependencies) {
         const { error } = await state.client.from('job_postings').insert(payload);
         if (error)
             throw error;
-    } toast(id ? 'Job posting updated.' : 'Job posting created.'); $('#recordDialog').close(); renderPage(); }
+    } toast(id ? 'Job posting updated.' : 'Job posting created.', 'success'); $('#recordDialog').close(); renderPage(); }
 
     async function openJob(id) { const j = state.jobs.find(x => x.id === id); openDialog(id ? 'Edit job posting' : 'New job posting', field('title', 'Position title', 'text', true, j?.title || '') + field('department', 'Department', 'text', true, j?.department || '') + field('employment_type', 'Employment type', 'select', true, j?.employment_type || 'Full-Time', ['Full-Time', 'Part-Time', 'Contract', 'Temporary']) + field('closing_date', 'Closing date', 'date', true, j?.closing_date || '') + field('vacancies', 'Number of vacancies', 'number', true, j?.vacancies ?? 1) + field('description', 'Job description', 'textarea', true, j?.description || '') + field('qualifications', 'Qualifications', 'textarea', false, j?.qualifications || '') + field('status', 'Status', 'select', true, j?.status || 'Open', ['Open', 'Closed']), f => saveJob(f, id), 'JOB POSTING'); }
 
@@ -80,7 +80,7 @@ window.RMSJobApplicationActions = function (dependencies) {
             });
             if (error) throw error;
 
-            toast('Application submitted.');
+            toast('Application submitted. Track its status in My applications.', 'success');
             $('#recordDialog').close();
             state.page = 'my-applications';
             await renderPage();
@@ -106,7 +106,7 @@ window.RMSJobApplicationActions = function (dependencies) {
             }
             const { error } = await state.client.from('applications').update({ status: nextStatus, updated_at: new Date().toISOString() }).eq('application_id', id);
             if (error) throw error;
-            toast('Application status updated.');
+            toast('Application status updated.', 'success');
             $('#recordDialog').close();
             await renderPage();
         }, 'APPLICATION');

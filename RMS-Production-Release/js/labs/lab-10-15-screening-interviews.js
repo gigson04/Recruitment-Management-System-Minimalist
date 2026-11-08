@@ -93,7 +93,7 @@ window.RMSEvaluationActions = function (dependencies) {
             const nextStatus = payload.result === 'Qualified' ? 'Qualified' : payload.result === 'Not Qualified' ? 'Rejected' : 'Under Screening';
             const { error: applicationError } = await state.client.from('applications').update({ status: nextStatus, updated_at: new Date().toISOString() }).eq('application_id', applicationId);
             if (applicationError) console.warn('Screening saved, but application status was not synchronized:', applicationError.message);
-            toast(`Screening saved with a total score of ${totalScore} / 100.`);
+            toast(`Screening saved with a total score of ${totalScore} / 100.`, 'success');
             $('#recordDialog').close();
             await renderPage();
         }, 'SCREENING');
@@ -204,7 +204,7 @@ window.RMSEvaluationActions = function (dependencies) {
                 if (error) console.warn('Interview saved, but application status was not synchronized:', error.message);
             }
 
-            toast(totalScore == null ? 'Interview saved.' : 'Interview saved with a score of ' + totalScore + ' / 100 (' + interviewResult + ').');
+            toast(totalScore == null ? 'Interview saved.' : 'Interview saved with a score of ' + totalScore + ' / 100 (' + interviewResult + ').', 'success');
             $('#recordDialog').close();
             renderPage();
         }, 'INTERVIEW');
