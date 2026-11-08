@@ -1352,7 +1352,8 @@ td .subcell {
   .screening-rubric, .interview-rubric { padding: 12px; }
 }
 
-/* Larger default sizing for comfortable reading at 100% browser zoom. */
+/* Slightly enlarge the interface while preserving the browser's responsive layout. */
+html { zoom: 1.04; }
 :root { font-size: 16px; }
 body, .app-shell { min-height: 100vh; min-height: 100dvh; }
 .micro { font-size: 11px; }
